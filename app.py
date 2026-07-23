@@ -35,9 +35,14 @@ def limpar_obs():
     st.session_state["input_obs"] = ""
 
 # ==========================================
-# CABEÇALHO 
+# CABEÇALHO E VISUAL (IMAGENS)
 # ==========================================
-st.title("🔌 Fiscalização de Obras")
+# Tenta carregar a imagem. Se der erro (ex: nome errado ou arquivo faltando), ele mostra o texto padrão.
+try:
+    st.image("imagem.png", use_container_width=True)
+except Exception:
+    st.title("🔌 Fiscalização de Obras")
+
 st.markdown("---")
 
 # Carrega composição
@@ -121,7 +126,7 @@ elif opcao_foto == "Anexar arquivo da Galeria":
     foto_arquivo = st.file_uploader("Escolha uma imagem", type=["jpg", "jpeg", "png"])
 
 # ==========================================
-# 5. OBSERVAÇÕES E BOTÃO SALVAR
+# 5. OBSERVAÇÕES E BOTÕES SALVAR/LIMPAR
 # ==========================================
 st.markdown("---")
 st.subheader("📝 Observações")
