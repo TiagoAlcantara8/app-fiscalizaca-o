@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# FUNÇÃO PARA LIMPAR OS DADOS
+# FUNÇÕES PARA LIMPAR OS DADOS
 # ==========================================
 # Inicializa as variáveis na memória se elas não existirem
 if "input_obra" not in st.session_state:
@@ -23,19 +23,20 @@ if "input_poste" not in st.session_state:
 if "input_obs" not in st.session_state:
     st.session_state["input_obs"] = ""
 
-# Função que zera os campos
+# Função que zera todos os campos (Vai para o topo)
 def limpar_tudo():
     st.session_state["input_obra"] = ""
     st.session_state["input_municipio"] = ""
     st.session_state["input_poste"] = ""
     st.session_state["input_obs"] = ""
 
-# ==========================================
-# CABEÇALHO E VISUAL (IMAGENS)
-# ==========================================
-# Se você tiver um logo da empresa, salve como 'logo.png' na mesma pasta e descomente a linha abaixo (tire o #):
-# st.image("logo.png", width=200)
+# Função que zera apenas a observação (Fica lá embaixo)
+def limpar_obs():
+    st.session_state["input_obs"] = ""
 
+# ==========================================
+# CABEÇALHO 
+# ==========================================
 st.title("🔌 Fiscalização de Obras")
 st.markdown("---")
 
@@ -47,8 +48,12 @@ except Exception:
     st.stop()
 
 # ==========================================
-# 1. DADOS GERAIS
+# 1. DADOS GERAIS & BOTÃO LIMPAR TUDO NO TOPO
 # ==========================================
+col_top1, col_top2 = st.columns([4, 1])
+with col_top2:
+    st.button("🧹 Limpar Todos os Dados", on_click=limpar_tudo, type="secondary", use_container_width=True)
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -116,21 +121,21 @@ elif opcao_foto == "Anexar arquivo da Galeria":
     foto_arquivo = st.file_uploader("Escolha uma imagem", type=["jpg", "jpeg", "png"])
 
 # ==========================================
-# 5. OBSERVAÇÕES E BOTÕES
+# 5. OBSERVAÇÕES E BOTÃO SALVAR
 # ==========================================
 st.markdown("---")
 st.subheader("📝 Observações")
 observacao = st.text_area("Digite suas observações", key="input_obs")
 
-st.markdown("<br>", unsafe_allow_html=True) # Dá um pequeno espaço visual
+st.markdown("<br>", unsafe_allow_html=True) 
 
-# Botões Lado a Lado
+# Botões Lado a Lado (Salvar e Limpar Observação)
 col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
     salvar = st.button("✅ Salvar Fiscalização", use_container_width=True)
 with col_btn2:
-    st.button("🗑️ Limpar Tudo", on_click=limpar_tudo, type="secondary", use_container_width=True)
+    st.button("🗑️ Limpar Apenas Observação", on_click=limpar_obs, type="secondary", use_container_width=True)
 
 # ==========================================
 # 6. LÓGICA DE SALVAR
