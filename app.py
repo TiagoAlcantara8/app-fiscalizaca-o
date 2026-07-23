@@ -12,13 +12,11 @@ st.title("🔌 Fiscalização de Obras")
 st.markdown("---")
 
 # Carrega composição
-
 df_comp = pd.read_excel(
     "composicoes.xlsx"
 )
 
 # Dados da obra
-
 col1, col2 = st.columns(2)
 
 with col1:
@@ -46,7 +44,6 @@ with col2:
     )
 
 # Filtra composição
-
 resultado = df_comp[
     (df_comp["Estrutura"] == estrutura)
     &
@@ -104,10 +101,8 @@ if salvar:
         "Municipio": municipio,
         "Estrutura": estrutura,
         "Acao": acao,
-        "Cod_MO": resultado.iloc[0]["Cod_MO"]
-        if len(resultado) > 0 else "",
-        "Descricao_MO": resultado.iloc[0]["Descricao_MO"]
-        if len(resultado) > 0 else "",
+        "Cod_MO": resultado.iloc[0]["Cod_MO"] if len(resultado) > 0 else "",
+        "Descricao_MO": resultado.iloc[0]["Descricao_MO"] if len(resultado) > 0 else "",
         "Observacao": observacao
     }
 
@@ -116,16 +111,12 @@ if salvar:
     arquivo = "fiscalizacoes.xlsx"
 
     if os.path.exists(arquivo):
-
         existente = pd.read_excel(arquivo)
-
         final = pd.concat(
             [existente, novo],
             ignore_index=True
         )
-
     else:
-
         final = novo
 
     final.to_excel(
@@ -134,19 +125,35 @@ if salvar:
     )
 
     if foto:
-
         os.makedirs(
             "fotos",
             exist_ok=True
         )
-
         nome_foto = (
             f"fotos/{obra}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
         )
-
         with open(nome_foto, "wb") as f:
             f.write(foto.getbuffer())
 
     st.success(
         "Fiscalização salva com sucesso!"
     )
+
+# ==========================================
+# NOVO BLOCO: DOWNLOAD DA PLANILHA GERADA
+# ==========================================
+st.markdown("---")
+st.subheader("📥 Download dos Dados")
+
+arquivo_gerado = "fiscalizacoes.xlsx"
+
+if os.path.exists(arquivo_gerado):
+    with open(arquivo_gerado, "rb") as f:
+        st.download_button(
+            label="Baixar Planilha de Fiscalizações",
+            data=f,
+            file_name="fiscalizacoes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+else:
+    st.info("Nenhuma fiscalização salva ainda. Preencha o formulário acima para gerar a planilha!")
