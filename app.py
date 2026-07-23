@@ -84,9 +84,10 @@ observacao = st.text_area("Digite suas observações")
 
 salvar = st.button("Salvar Fiscalização")
 
-# 6. LÓGICA DE SALVAR (TUDO EM UMA ABA SÓ)
+# 6. LÓGICA DE SALVAR (UM ARQUIVO POR OBRA)
 if salvar:
     nome_poste = poste.strip().upper() if poste.strip() != "" else "GERAL"
+    nome_obra_arquivo = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
     
     # Criar uma linha para a Mão de Obra
     dados_mo = {
@@ -116,7 +117,7 @@ if salvar:
                 "Estrutura": estrutura,
                 "Acao": acao,
                 "Tipo_Item": "Material",
-                "Codigo": "", # Opcional: Adicionar coluna de código do material se tiver na base
+                "Codigo": "", 
                 "Descricao": row["Material"],
                 "Quantidade": row["Quantidade"],
                 "Observacao": observacao
@@ -124,7 +125,9 @@ if salvar:
             linhas_para_salvar.append(dados_mat)
 
     novo_df = pd.DataFrame(linhas_para_salvar)
-    arquivo = "fiscalizacoes.xlsx"
+    
+    # Nomeia o arquivo de acordo com a obra
+    arquivo = f"Fiscalizacao_Obra_{nome_obra_arquivo}.xlsx"
 
     # Salva na mesma aba contínua
     if os.path.exists(arquivo):
@@ -138,24 +141,26 @@ if salvar:
     # Salva a Foto
     if foto_arquivo is not None:
         os.makedirs("fotos", exist_ok=True)
-        nome_foto = f"fotos/{obra}_{nome_poste}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
         with open(nome_foto, "wb") as f:
             f.write(foto_arquivo.getbuffer())
 
-    st.success(f"Fiscalização do poste {nome_poste} salva com sucesso!")
+    st.success(f"Fiscalização do poste {nome_poste} salva na Obra {nome_obra_arquivo}!")
 
-# 7. BOTÃO DE DOWNLOAD
+# 7. BOTÃO DE DOWNLOAD (Dinâmico por Obra)
 st.markdown("---")
 st.subheader("📥 Download dos Dados")
-arquivo_gerado = "fiscalizacoes.xlsx"
+
+obra_atual = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
+arquivo_gerado = f"Fiscalizacao_Obra_{obra_atual}.xlsx"
 
 if os.path.exists(arquivo_gerado):
     with open(arquivo_gerado, "rb") as f:
         st.download_button(
-            label="Baixar Planilha de Fiscalizações",
+            label=f"Baixar Planilha da Obra {obra_atual}",
             data=f,
-            file_name="fiscalizacoes.xlsx",
+            file_name=arquivo_gerado,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 else:
-    st.info("Nenhuma fiscalização salva ainda. Preencha o formulário acima para gerar a planilha!")
+    st.info(f"Nenhum dado salvo para a obra '{obra_atual}' ainda.")
