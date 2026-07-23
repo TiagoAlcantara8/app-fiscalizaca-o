@@ -3,30 +3,64 @@ import pandas as pd
 from datetime import datetime
 import os
 
+# Configuração inicial da página
 st.set_page_config(
     page_title="Fiscalização de Obras",
-    layout="wide"
+    layout="wide",
+    page_icon="🔌"
 )
+
+# ==========================================
+# FUNÇÃO PARA LIMPAR OS DADOS
+# ==========================================
+# Inicializa as variáveis na memória se elas não existirem
+if "input_obra" not in st.session_state:
+    st.session_state["input_obra"] = ""
+if "input_municipio" not in st.session_state:
+    st.session_state["input_municipio"] = ""
+if "input_poste" not in st.session_state:
+    st.session_state["input_poste"] = ""
+if "input_obs" not in st.session_state:
+    st.session_state["input_obs"] = ""
+
+# Função que zera os campos
+def limpar_tudo():
+    st.session_state["input_obra"] = ""
+    st.session_state["input_municipio"] = ""
+    st.session_state["input_poste"] = ""
+    st.session_state["input_obs"] = ""
+
+# ==========================================
+# CABEÇALHO E VISUAL (IMAGENS)
+# ==========================================
+# Se você tiver um logo da empresa, salve como 'logo.png' na mesma pasta e descomente a linha abaixo (tire o #):
+# st.image("logo.png", width=200)
 
 st.title("🔌 Fiscalização de Obras")
 st.markdown("---")
 
 # Carrega composição
-df_comp = pd.read_excel(
-    "composicoes.xlsx"
-)
+try:
+    df_comp = pd.read_excel("composicoes.xlsx")
+except Exception:
+    st.error("Erro: O arquivo 'composicoes.xlsx' não foi encontrado na pasta.")
+    st.stop()
 
+# ==========================================
 # 1. DADOS GERAIS
+# ==========================================
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    obra = st.text_input("Número da Obra")
+    obra = st.text_input("Número da Obra", key="input_obra")
 with col2:
-    municipio = st.text_input("Município")
+    municipio = st.text_input("Município", key="input_municipio")
 with col3:
-    poste = st.text_input("Identificação do Poste (Ex: P01, P02)")
+    poste = st.text_input("Identificação do Poste (Ex: P01, P02)", key="input_poste")
 
+# ==========================================
 # 2. ESTRUTURA E AÇÃO
+# ==========================================
 col1, col2 = st.columns(2)
 
 with col1:
@@ -48,20 +82,24 @@ resultado = df_comp[
 
 st.markdown("---")
 
+# ==========================================
 # 3. MOSTRAR MATERIAIS E MÃO DE OBRA
-st.subheader("Mão de Obra e Materiais")
+# ==========================================
+st.subheader("🛠️ Mão de Obra e Materiais")
 
 if len(resultado) > 0:
     cod_mo = resultado.iloc[0]["Cod_MO"]
     desc_mo = resultado.iloc[0]["Descricao_MO"]
-    st.success(f"{cod_mo} - {desc_mo}")
+    st.success(f"**{cod_mo}** - {desc_mo}")
     st.dataframe(resultado[["Material", "Quantidade"]], use_container_width=True)
 else:
     st.warning("Composição não encontrada.")
 
 st.markdown("---")
 
+# ==========================================
 # 4. FOTOS
+# ==========================================
 st.subheader("📸 Fotos")
 
 opcao_foto = st.radio(
@@ -77,14 +115,26 @@ if opcao_foto == "Tirar foto com a Câmera":
 elif opcao_foto == "Anexar arquivo da Galeria":
     foto_arquivo = st.file_uploader("Escolha uma imagem", type=["jpg", "jpeg", "png"])
 
-# 5. OBSERVAÇÕES E BOTÃO
+# ==========================================
+# 5. OBSERVAÇÕES E BOTÕES
+# ==========================================
 st.markdown("---")
 st.subheader("📝 Observações")
-observacao = st.text_area("Digite suas observações")
+observacao = st.text_area("Digite suas observações", key="input_obs")
 
-salvar = st.button("Salvar Fiscalização")
+st.markdown("<br>", unsafe_allow_html=True) # Dá um pequeno espaço visual
 
-# 6. LÓGICA DE SALVAR (UM ARQUIVO POR OBRA)
+# Botões Lado a Lado
+col_btn1, col_btn2 = st.columns(2)
+
+with col_btn1:
+    salvar = st.button("✅ Salvar Fiscalização", use_container_width=True)
+with col_btn2:
+    st.button("🗑️ Limpar Tudo", on_click=limpar_tudo, type="secondary", use_container_width=True)
+
+# ==========================================
+# 6. LÓGICA DE SALVAR
+# ==========================================
 if salvar:
     nome_poste = poste.strip().upper() if poste.strip() != "" else "GERAL"
     nome_obra_arquivo = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
@@ -126,10 +176,9 @@ if salvar:
 
     novo_df = pd.DataFrame(linhas_para_salvar)
     
-    # Nomeia o arquivo de acordo com a obra
     arquivo = f"Fiscalizacao_Obra_{nome_obra_arquivo}.xlsx"
 
-    # Salva na mesma aba contínua
+    # Salva na planilha
     if os.path.exists(arquivo):
         existente = pd.read_excel(arquivo)
         final = pd.concat([existente, novo_df], ignore_index=True)
@@ -145,9 +194,11 @@ if salvar:
         with open(nome_foto, "wb") as f:
             f.write(foto_arquivo.getbuffer())
 
-    st.success(f"Fiscalização do poste {nome_poste} salva na Obra {nome_obra_arquivo}!")
+    st.success(f"Fiscalização do poste {nome_poste} salva na Obra {nome_obra_arquivo} com sucesso!")
 
-# 7. BOTÃO DE DOWNLOAD (Dinâmico por Obra)
+# ==========================================
+# 7. BOTÃO DE DOWNLOAD
+# ==========================================
 st.markdown("---")
 st.subheader("📥 Download dos Dados")
 
