@@ -22,6 +22,7 @@ if "input_poste" not in st.session_state:
     st.session_state["input_poste"] = ""
 if "input_obs" not in st.session_state:
     st.session_state["input_obs"] = ""
+# NOVA MEMÓRIA: O Carrinho de Compras do Poste
 if "carrinho" not in st.session_state:
     st.session_state["carrinho"] = []
 
@@ -30,7 +31,7 @@ def limpar_tudo():
     st.session_state["input_municipio"] = ""
     st.session_state["input_poste"] = ""
     st.session_state["input_obs"] = ""
-    st.session_state["carrinho"] = []
+    st.session_state["carrinho"] = [] # Limpa o carrinho também
 
 def limpar_obs():
     st.session_state["input_obs"] = ""
@@ -54,10 +55,12 @@ try:
     tb_composicao = pd.read_excel(xls, "tb_Composicao")
     tb_material = pd.read_excel(xls, "tb_Material")
     
+    # Limpa espaços invisíveis nos nomes das colunas
     tb_mao_obra.columns = tb_mao_obra.columns.str.strip()
     tb_composicao.columns = tb_composicao.columns.str.strip()
     tb_material.columns = tb_material.columns.str.strip()
 
+    # Deleta a coluna de ID do Power Apps para não atrapalhar
     for df in [tb_mao_obra, tb_composicao, tb_material]:
         if "__PowerAppsId__" in df.columns:
             df.drop(columns=["__PowerAppsId__"], inplace=True)
@@ -133,6 +136,7 @@ with col_e1:
 with col_e2:
     acao = st.selectbox("Ação da Estrutura", ["Instalação", "Retirada"])
 
+# Busca a Mão de Obra
 mo_info = tb_mao_obra[tb_mao_obra["Estrutura"] == estrutura]
 if len(mo_info) > 0:
     cod_mo = mo_info.iloc[0]["Cod_MO"]
@@ -143,6 +147,7 @@ else:
 
 st.success(f"**Mão de Obra identificada:** {cod_mo} - {desc_mo} ({acao})")
 
+# Busca Materiais
 resultado_materiais = tb_comp_filtrada[tb_comp_filtrada["Estrutura"] == estrutura]
 if len(resultado_materiais) > 0:
     df_materiais_base = resultado_materiais[["CodMaterial", "Material", "Quantidade"]].copy()
@@ -151,17 +156,16 @@ else:
     st.warning("Materiais não encontrados para esta estrutura. Insira manualmente abaixo:")
     df_materiais_base = pd.DataFrame(columns=["Codigo", "Material", "Quantidade"])
 
-st.info("💡 **Dica:** Revise os materiais e clique em 'Adicionar Esta Estrutura' para guardar no poste. NÃO USE O BOTÃO DE DOWNLOAD DA TABELA AQUI.")
+st.info("💡 **Dica:** Revise/altere os materiais abaixo e clique em 'Adicionar Esta Estrutura' para guardar no poste.")
 
-# Configurado hide_index para deixar a tabela mais limpa
 df_editavel = st.data_editor(
     df_materiais_base,
     num_rows="dynamic", 
     use_container_width=True,
-    hide_index=True,
-    key=f"editor_{estrutura}"
+    key=f"editor_{estrutura}" # Key dinâmica para não dar conflito ao mudar a seleção
 )
 
+# --- BOTÃO DE ADICIONAR AO CARRINHO ---
 if st.button("➕ Adicionar Esta Estrutura ao Poste", type="primary"):
     item_carrinho = {
         "estrutura": estrutura,
@@ -169,13 +173,13 @@ if st.button("➕ Adicionar Esta Estrutura ao Poste", type="primary"):
         "rede": tipo_rede,
         "cod_mo": cod_mo,
         "desc_mo": desc_mo,
-        "materiais": df_editavel.to_dict('records')
+        "materiais": df_editavel.to_dict('records') # Transforma o DataFrame editado em uma lista de dicionários
     }
     st.session_state["carrinho"].append(item_carrinho)
-    st.rerun()
+    st.rerun() # Atualiza a tela para mostrar o carrinho cheio
 
 # ==========================================
-# 4. RESUMO DO POSTE
+# 4. RESUMO DO POSTE (O CARRINHO VISUAL)
 # ==========================================
 st.markdown("---")
 st.subheader("🛒 Estruturas Adicionadas neste Poste")
@@ -183,9 +187,11 @@ st.subheader("🛒 Estruturas Adicionadas neste Poste")
 if len(st.session_state["carrinho"]) == 0:
     st.info("Nenhuma estrutura adicionada ainda. Preencha acima e clique em 'Adicionar Esta Estrutura'.")
 else:
+    # Mostra os itens que o fiscal já adicionou
     for i, item in enumerate(st.session_state["carrinho"]):
         st.write(f"**{i+1}. Estrutura {item['estrutura']}** ({item['rede']} - {item['acao']}) | *{len(item['materiais'])} materiais listados*")
     
+    # Botão para esvaziar o carrinho caso o fiscal tenha errado
     if st.button("🗑️ Esvaziar Estruturas do Poste"):
         st.session_state["carrinho"] = []
         st.rerun()
@@ -208,12 +214,13 @@ st.subheader("📝 Observações Gerais do Poste")
 observacao = st.text_area("Digite suas observações", key="input_obs")
 
 # ==========================================
-# 6. SALVAMENTO FINAL DA PLANILHA OFICIAL
+# 6. SALVAMENTO FINAL DO POSTE INTEIRO
 # ==========================================
 st.markdown("<br>", unsafe_allow_html=True) 
 salvar = st.button("✅ Salvar Fiscalização Completa do Poste", use_container_width=True, type="primary")
 
 if salvar:
+    # Se ele não marcou o poste e não tem nada no carrinho, avisa
     if len(st.session_state["carrinho"]) == 0 and not incluir_poste:
         st.error("⚠️ Adicione pelo menos uma estrutura ou marque a inclusão do poste limpo antes de salvar!")
     else:
@@ -222,13 +229,13 @@ if salvar:
         
         linhas_para_salvar = []
 
+        # 1. Adiciona a linha da Mão de Obra do Poste (Se a caixinha estiver marcada)
         if incluir_poste:
             dados_poste = {
                 "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                 "Obra": obra,
                 "Municipio": municipio,
                 "Poste": nome_poste,
-                "Rede": "MT", # Poste geralmente atrelado à rede primária, mas pode deixar em branco se preferir
                 "Estrutura": "Poste Limpo",
                 "Acao": "Instalação", 
                 "Tipo_Item": "Mão de Obra",
@@ -239,13 +246,15 @@ if salvar:
             }
             linhas_para_salvar.append(dados_poste)
 
+        # 2. Percorre o Carrinho e adiciona tudo que está nele
         for item in st.session_state["carrinho"]:
+            
+            # 2.1 Mão de Obra da Estrutura atual do carrinho
             dados_mo_est = {
                 "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                 "Obra": obra,
                 "Municipio": municipio,
                 "Poste": nome_poste,
-                "Rede": item["rede"], # ADICIONADO A COLUNA DE REDE (MT/BT)
                 "Estrutura": item["estrutura"],
                 "Acao": item["acao"],
                 "Tipo_Item": "Mão de Obra",
@@ -256,14 +265,15 @@ if salvar:
             }
             linhas_para_salvar.append(dados_mo_est)
             
+            # 2.2 Materiais da Estrutura atual do carrinho
             for mat in item["materiais"]:
+                # Pula linhas vazias
                 if pd.notna(mat.get("Material")) and str(mat.get("Material")).strip() != "":
                     dados_mat = {
                         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                         "Obra": obra,
                         "Municipio": municipio,
                         "Poste": nome_poste,
-                        "Rede": item["rede"], # ADICIONADO A COLUNA DE REDE (MT/BT)
                         "Estrutura": item["estrutura"],
                         "Acao": item["acao"],
                         "Tipo_Item": "Material",
@@ -274,6 +284,7 @@ if salvar:
                     }
                     linhas_para_salvar.append(dados_mat)
 
+        # Cria o arquivo final e salva tudo de uma vez
         novo_df = pd.DataFrame(linhas_para_salvar)
         arquivo = f"Fiscalizacao_Obra_{nome_obra_arquivo}.xlsx"
 
@@ -285,12 +296,14 @@ if salvar:
 
         final.to_excel(arquivo, index=False)
 
+        # 3. Salva a Foto
         if foto_arquivo is not None:
             os.makedirs("fotos", exist_ok=True)
             nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
             with open(nome_foto, "wb") as f:
                 f.write(foto_arquivo.getbuffer())
 
+        # Limpa o carrinho após salvar com sucesso e avisa
         st.session_state["carrinho"] = []
         st.success(f"Fiscalização completa do poste {nome_poste} salva na Obra {nome_obra_arquivo}!")
 
@@ -298,7 +311,7 @@ if salvar:
 # 7. BOTÕES DE DOWNLOAD (EXCEL E FOTOS)
 # ==========================================
 st.markdown("---")
-st.subheader("📥 Download dos Dados Oficiais")
+st.subheader("📥 Download dos Dados e Fotos")
 
 obra_atual = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
 arquivo_gerado = f"Fiscalizacao_Obra_{obra_atual}.xlsx"
@@ -307,9 +320,9 @@ col_down1, col_down2 = st.columns(2)
 with col_down1:
     if os.path.exists(arquivo_gerado):
         with open(arquivo_gerado, "rb") as f:
-            st.download_button(label=f"📊 Baixar Planilha COMPLETA da Obra {obra_atual}", data=f, file_name=arquivo_gerado, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button(label=f"📊 Baixar Planilha da Obra {obra_atual}", data=f, file_name=arquivo_gerado, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     else:
-        st.info(f"Nenhum dado salvo para a obra '{obra_atual}'. Use o botão verde acima para salvar primeiro.")
+        st.info(f"Nenhum dado salvo para a obra '{obra_atual}'.")
 
 with col_down2:
     if os.path.exists("fotos") and len(os.listdir("fotos")) > 0:
