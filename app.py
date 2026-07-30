@@ -80,8 +80,8 @@ if incluir_poste:
     col_p1, col_p2 = st.columns(2)
     
     with col_p1:
-        # Opções ajustadas a partir de 10 metros
-        altura = st.selectbox("Altura do Poste (m)", [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25])
+        # Opções ajustadas estritamente de 10 a 16 metros
+        altura = st.selectbox("Altura do Poste (m)", [10, 11, 12, 13, 14, 15, 16])
     
     with col_p2:
         # Opções restritas aos esforços solicitados
