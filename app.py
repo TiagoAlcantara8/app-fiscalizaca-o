@@ -159,7 +159,7 @@ if len(mo_info) > 0:
     col_valor = "Valor_Instalar" if acao == "Instalação" else "Valor_Retirar"
     valor_previsto = tratar_valor(mo_info.iloc[0][col_valor])
 else:
-    # Tenta buscar sem considerar o Tipo (fallback caso a base não tenha LV/LM mapeado para essa estrutura)
+    # Tenta buscar sem considerar o Tipo (fallback caso a base não tenha LV/LM mapeado)
     mo_info_fallback = tb_mao_obra[tb_mao_obra["Estrutura"] == estrutura]
     if len(mo_info_fallback) > 0:
         cod_mo = mo_info_fallback.iloc[0]["Cod_MO"]
@@ -312,7 +312,7 @@ if salvar:
                         "Codigo": mat.get("Codigo", ""),
                         "Descricao": mat.get("Material", ""),
                         "Quantidade": mat.get("Quantidade", 0),
-                        "Valor_Unitario": 0.0, # Materiais sem valor cadastrado por enquanto
+                        "Valor_Unitario": 0.0, 
                         "Valor_Total": 0.0,
                         "Observacao": observacao
                     }
@@ -327,6 +327,16 @@ if salvar:
         else:
             final = novo_df
 
+        # ========================================================
+        # NOVA LÓGICA: SOMA DO GASTO PREVISTO DA OBRA
+        # ========================================================
+        # Garante que a coluna Valor_Total seja tratada como número para evitar erros de soma
+        final["Valor_Total"] = pd.to_numeric(final["Valor_Total"], errors="coerce").fillna(0.0)
+        
+        # Agrupa por Obra e soma todos os Valores Totais, criando a nova coluna 'Gasto_Previsto_Obra'
+        final["Gasto_Previsto_Obra"] = final.groupby("Obra")["Valor_Total"].transform("sum").round(2)
+
+        # Salva o arquivo final
         final.to_excel(arquivo, index=False)
 
         if foto_arquivo is not None:
