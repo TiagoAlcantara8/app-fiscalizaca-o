@@ -42,7 +42,7 @@ except Exception:
 
 st.markdown("---")
 
-# Carrega composição
+# Carrega composição (Ainda usando a base antiga temporariamente)
 try:
     df_comp = pd.read_excel("composicoes.xlsx")
 except Exception:
@@ -66,87 +66,99 @@ with col3:
     poste = st.text_input("Identificação do Poste (Ex: P01, P02)", key="input_poste")
 
 # ==========================================
-# 2. ESTRUTURA E AÇÃO
+# 2. DADOS DO POSTE (NOVA LÓGICA)
 # ==========================================
-col1, col2 = st.columns(2)
-
-with col1:
-    estrutura = st.selectbox(
-        "Estrutura",
-        sorted(df_comp["Estrutura"].unique())
-    )
-
-with col2:
-    acao = st.selectbox(
-        "Ação",
-        ["Instalação", "Retirada"]
-    )
-
-# Filtra composição
-resultado = df_comp[
-    (df_comp["Estrutura"] == estrutura) & (df_comp["Acao"] == acao)
-]
-
 st.markdown("---")
+st.subheader("🏗️ Dados do Poste Principal")
+
+incluir_poste = st.checkbox("Incluir instalação/retirada de Poste Limpo nesta fiscalização?")
+
+cod_poste = ""
+desc_poste = ""
+
+if incluir_poste:
+    col_p1, col_p2 = st.columns(2)
+    
+    with col_p1:
+        altura = st.number_input("Altura do Poste (m)", min_value=5, max_value=25, value=12, step=1)
+    
+    with col_p2:
+        esforco = st.selectbox("Esforço (daN)", [150, 200, 300, 400, 600, 800, 1000])
+
+    # Regras fixas baseadas na sua fórmula do Power Apps
+    if altura <= 12 and esforco <= 600:
+        cod_poste = "1015"
+        desc_poste = "Poste Limpo (sem mat. ou equip.) 12 >=P<= 600"
+    elif altura <= 12 and esforco > 600:
+        cod_poste = "1016"
+        desc_poste = "Poste Limpo (sem mat. ou equip.) 12 >=P> 600"
+    elif 12 < altura <= 16 and esforco >= 600:
+        cod_poste = "1017"
+        desc_poste = "Poste Limpo (sem mat. ou equip.) 12<P<=16 e P>=600"
+    else:
+        cod_poste = "1018"
+        desc_poste = "Poste Limpo (sem mat. ou equip.) 16 <P> 600"
+
+    st.info(f"Código Mão de Obra do Poste gerado: **{cod_poste}** - {desc_poste}")
 
 # ==========================================
-# 3. MOSTRAR MATERIAIS E MÃO DE OBRA (EDITÁVEL)
+# 3. ESTRUTURA E AÇÃO
 # ==========================================
-st.subheader("🛠️ Mão de Obra e Materiais")
+st.markdown("---")
+st.subheader("⚙️ Estruturas e Equipamentos")
 
-st.info("💡 **Dica:** Você pode alterar as quantidades, apagar linhas ou adicionar novos materiais na tabela abaixo antes de salvar.")
+col_e1, col_e2 = st.columns(2)
 
-# Prepara os dados base para a tabela
+with col_e1:
+    estrutura = st.selectbox("Estrutura Adicional", sorted(df_comp["Estrutura"].unique()))
+
+with col_e2:
+    acao = st.selectbox("Ação da Estrutura", ["Instalação", "Retirada"])
+
+resultado = df_comp[(df_comp["Estrutura"] == estrutura) & (df_comp["Acao"] == acao)]
+
+# ==========================================
+# 4. TABELA DE MATERIAIS (EDITÁVEL)
+# ==========================================
+st.info("💡 **Dica:** Você pode alterar as quantidades, apagar linhas ou adicionar novos materiais na tabela abaixo.")
+
 if len(resultado) > 0:
     cod_mo = resultado.iloc[0]["Cod_MO"]
     desc_mo = resultado.iloc[0]["Descricao_MO"]
     st.success(f"**{cod_mo}** - {desc_mo}")
     df_materiais_base = resultado[["Material", "Quantidade"]].copy()
 else:
-    st.warning("Composição padrão não encontrada. Você pode inserir os materiais manualmente abaixo:")
+    st.warning("Composição da estrutura não encontrada. Insira manualmente abaixo:")
     cod_mo = "MO_EXTRA"
     desc_mo = f"Mão de Obra para {estrutura} ({acao})"
     df_materiais_base = pd.DataFrame(columns=["Material", "Quantidade"])
 
-# O recurso mágico de edição:
 df_editavel = st.data_editor(
     df_materiais_base,
-    num_rows="dynamic", # Isso é o que permite adicionar novas linhas
+    num_rows="dynamic", 
     use_container_width=True,
     key="editor_materiais"
 )
 
+# ==========================================
+# 5. FOTOS E OBSERVAÇÕES
+# ==========================================
 st.markdown("---")
-
-# ==========================================
-# 4. FOTOS
-# ==========================================
 st.subheader("📸 Fotos")
-
-opcao_foto = st.radio(
-    "Como deseja enviar a foto?",
-    ["Tirar foto com a Câmera", "Anexar arquivo da Galeria", "Não enviar foto"],
-    horizontal=True
-)
+opcao_foto = st.radio("Como deseja enviar a foto?", ["Tirar foto com a Câmera", "Anexar arquivo da Galeria", "Não enviar foto"], horizontal=True)
 
 foto_arquivo = None
-
 if opcao_foto == "Tirar foto com a Câmera":
     foto_arquivo = st.camera_input("Tire uma foto da estrutura")
 elif opcao_foto == "Anexar arquivo da Galeria":
     foto_arquivo = st.file_uploader("Escolha uma imagem", type=["jpg", "jpeg", "png"])
 
-# ==========================================
-# 5. OBSERVAÇÕES E BOTÃO SALVAR
-# ==========================================
 st.markdown("---")
 st.subheader("📝 Observações")
 observacao = st.text_area("Digite suas observações", key="input_obs")
-
 st.markdown("<br>", unsafe_allow_html=True) 
 
 col_btn1, col_btn2 = st.columns(2)
-
 with col_btn1:
     salvar = st.button("✅ Salvar Fiscalização", use_container_width=True)
 with col_btn2:
@@ -159,8 +171,27 @@ if salvar:
     nome_poste = poste.strip().upper() if poste.strip() != "" else "GERAL"
     nome_obra_arquivo = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
     
-    # 1. Salva a Mão de Obra
-    dados_mo = {
+    linhas_para_salvar = []
+
+    # 1. Salva a Mão de Obra do Poste (Se a caixinha estiver marcada)
+    if incluir_poste:
+        dados_poste = {
+            "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "Obra": obra,
+            "Municipio": municipio,
+            "Poste": nome_poste,
+            "Estrutura": "Poste Limpo",
+            "Acao": "Instalação", # Pode ajustar para retirar depois
+            "Tipo_Item": "Mão de Obra",
+            "Codigo": cod_poste,
+            "Descricao": desc_poste,
+            "Quantidade": 1,
+            "Observacao": observacao
+        }
+        linhas_para_salvar.append(dados_poste)
+
+    # 2. Salva a Mão de Obra da Estrutura
+    dados_mo_est = {
         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "Obra": obra,
         "Municipio": municipio,
@@ -173,13 +204,11 @@ if salvar:
         "Quantidade": 1,
         "Observacao": observacao
     }
+    linhas_para_salvar.append(dados_mo_est)
     
-    linhas_para_salvar = [dados_mo]
-    
-    # 2. Salva os Materiais (Lendo da TABELA EDITADA, não da base)
+    # 3. Salva os Materiais da Tabela Editada
     if len(df_editavel) > 0:
         for index, row in df_editavel.iterrows():
-            # Ignora linhas que foram adicionadas mas deixadas totalmente em branco
             if pd.notna(row["Material"]) and str(row["Material"]).strip() != "":
                 dados_mat = {
                     "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -207,14 +236,14 @@ if salvar:
 
     final.to_excel(arquivo, index=False)
 
-    # 3. Salva a Foto
+    # 4. Salva a Foto
     if foto_arquivo is not None:
         os.makedirs("fotos", exist_ok=True)
         nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
         with open(nome_foto, "wb") as f:
             f.write(foto_arquivo.getbuffer())
 
-    st.success(f"Fiscalização do poste {nome_poste} salva na Obra {nome_obra_arquivo} com sucesso!")
+    st.success(f"Fiscalização salva com sucesso na Obra {nome_obra_arquivo}!")
 
 # ==========================================
 # 7. BOTÕES DE DOWNLOAD (EXCEL E FOTOS)
@@ -224,36 +253,19 @@ st.subheader("📥 Download dos Dados e Fotos")
 
 obra_atual = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
 arquivo_gerado = f"Fiscalizacao_Obra_{obra_atual}.xlsx"
-
 col_down1, col_down2 = st.columns(2)
 
-# Botão do Excel
 with col_down1:
     if os.path.exists(arquivo_gerado):
         with open(arquivo_gerado, "rb") as f:
-            st.download_button(
-                label=f"📊 Baixar Planilha da Obra {obra_atual}",
-                data=f,
-                file_name=arquivo_gerado,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            st.download_button(label=f"📊 Baixar Planilha da Obra {obra_atual}", data=f, file_name=arquivo_gerado, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     else:
-        st.info(f"Nenhum dado salvo para a obra '{obra_atual}' ainda.")
+        st.info(f"Nenhum dado salvo para a obra '{obra_atual}'.")
 
-# Botão do ZIP de Fotos
 with col_down2:
     if os.path.exists("fotos") and len(os.listdir("fotos")) > 0:
-        # Compacta a pasta inteira em um arquivo .zip
         shutil.make_archive("fotos_backup", 'zip', "fotos")
-        
         with open("fotos_backup.zip", "rb") as f_zip:
-            st.download_button(
-                label="📦 Baixar Todas as Fotos (ZIP)",
-                data=f_zip,
-                file_name=f"Fotos_Fiscalizacao_{datetime.now().strftime('%Y%m%d')}.zip",
-                mime="application/zip",
-                use_container_width=True
-            )
+            st.download_button(label="📦 Baixar Todas as Fotos (ZIP)", data=f_zip, file_name=f"Fotos_Fiscalizacao_{datetime.now().strftime('%Y%m%d')}.zip", mime="application/zip", use_container_width=True)
     else:
-        st.info("Nenhuma foto foi salva ainda.")
+        st.info("Nenhuma foto salva ainda.")
