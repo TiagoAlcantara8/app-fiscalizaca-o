@@ -42,11 +42,27 @@ except Exception:
 
 st.markdown("---")
 
-# Carrega composição (Base antiga temporária)
+# ==========================================
+# CARREGAMENTO DO BANCO DE DADOS (NOVO)
+# ==========================================
 try:
-    df_comp = pd.read_excel("composicoes.xlsx")
+    xls = pd.ExcelFile("BANCO.xlsx")
+    tb_mao_obra = pd.read_excel(xls, "tb_MaoObra")
+    tb_composicao = pd.read_excel(xls, "tb_Composicao")
+    tb_material = pd.read_excel(xls, "tb_Material")
+    
+    # Limpa espaços invisíveis nos nomes das colunas
+    tb_mao_obra.columns = tb_mao_obra.columns.str.strip()
+    tb_composicao.columns = tb_composicao.columns.str.strip()
+    tb_material.columns = tb_material.columns.str.strip()
+
+    # Deleta a coluna de ID do Power Apps para não atrapalhar
+    for df in [tb_mao_obra, tb_composicao, tb_material]:
+        if "__PowerAppsId__" in df.columns:
+            df.drop(columns=["__PowerAppsId__"], inplace=True)
+            
 except Exception:
-    st.error("Erro: O arquivo 'composicoes.xlsx' não foi encontrado na pasta.")
+    st.error("Erro: O arquivo 'BANCO.xlsx' não foi encontrado na pasta. Faça o upload no GitHub.")
     st.stop()
 
 # ==========================================
@@ -66,7 +82,7 @@ with col3:
     poste = st.text_input("Identificação do Poste (Ex: P01, P02)", key="input_poste")
 
 # ==========================================
-# 2. DADOS DO POSTE (LÓGICA ATUALIZADA)
+# 2. DADOS DO POSTE
 # ==========================================
 st.markdown("---")
 st.subheader("🗼 Dados do Poste Principal")
@@ -80,25 +96,20 @@ if incluir_poste:
     col_p1, col_p2 = st.columns(2)
     
     with col_p1:
-        # Opções ajustadas estritamente de 10 a 16 metros
         altura = st.selectbox("Altura do Poste (m)", [10, 11, 12, 13, 14, 15, 16])
     
     with col_p2:
-        # Opções restritas aos esforços solicitados
         esforco = st.selectbox("Esforço (daN)", [300, 600, 1000])
 
     if altura <= 12 and esforco <= 600:
         cod_poste = "1015"
         desc_poste = "Poste Limpo (sem mat. ou equip.) 12 >=P<= 600"
-        
     elif altura <= 12 and esforco > 600:
         cod_poste = "1016"
         desc_poste = "Poste Limpo (sem mat. ou equip.) 12 >=P> 600"
-        
     elif 12 < altura <= 16 and esforco >= 600:
         cod_poste = "1017"
         desc_poste = "Poste Limpo (sem mat. ou equip.) 12<P<=16 e P>=600"
-        
     else:
         cod_poste = "1018"
         desc_poste = "Poste Limpo (sem mat. ou equip.) Configuração Especial"
@@ -113,30 +124,44 @@ st.subheader("⚙️ Estruturas e Equipamentos")
 
 col_e1, col_e2 = st.columns(2)
 
+# Busca as estruturas únicas da aba de composições
+estruturas_disponiveis = sorted(tb_composicao["Estrutura"].dropna().unique())
+
 with col_e1:
-    estrutura = st.selectbox("Estrutura Adicional", sorted(df_comp["Estrutura"].unique()))
+    estrutura = st.selectbox("Estrutura Adicional", estruturas_disponiveis)
 
 with col_e2:
     acao = st.selectbox("Ação da Estrutura", ["Instalação", "Retirada"])
 
-resultado = df_comp[(df_comp["Estrutura"] == estrutura) & (df_comp["Acao"] == acao)]
-
 # ==========================================
-# 4. TABELA DE MATERIAIS (EDITÁVEL)
+# 4. TABELA DE MATERIAIS E MÃO DE OBRA
 # ==========================================
 st.info("💡 **Dica:** Você pode alterar as quantidades, apagar linhas ou adicionar novos materiais na tabela abaixo.")
 
-if len(resultado) > 0:
-    cod_mo = resultado.iloc[0]["Cod_MO"]
-    desc_mo = resultado.iloc[0]["Descricao_MO"]
-    st.success(f"**{cod_mo}** - {desc_mo}")
-    df_materiais_base = resultado[["Material", "Quantidade"]].copy()
-else:
-    st.warning("Composição da estrutura não encontrada. Insira manualmente abaixo:")
-    cod_mo = "MO_EXTRA"
-    desc_mo = f"Mão de Obra para {estrutura} ({acao})"
-    df_materiais_base = pd.DataFrame(columns=["Material", "Quantidade"])
+# 4.1 Busca a Mão de Obra correspondente na tb_MaoObra
+mo_info = tb_mao_obra[tb_mao_obra["Estrutura"] == estrutura]
 
+if len(mo_info) > 0:
+    cod_mo = mo_info.iloc[0]["Cod_MO"]
+    desc_mo = mo_info.iloc[0]["Descricao_MO"]
+else:
+    cod_mo = "MO_EXTRA"
+    desc_mo = f"Mão de Obra para {estrutura}"
+
+st.success(f"**{cod_mo}** - {desc_mo} ({acao})")
+
+# 4.2 Busca os Materiais correspondentes na tb_Composicao
+resultado_materiais = tb_composicao[tb_composicao["Estrutura"] == estrutura]
+
+if len(resultado_materiais) > 0:
+    # Seleciona Código, Nome e Quantidade para o editor
+    df_materiais_base = resultado_materiais[["CodMaterial", "Material", "Quantidade"]].copy()
+    df_materiais_base.rename(columns={"CodMaterial": "Codigo"}, inplace=True)
+else:
+    st.warning("Materiais não encontrados para esta estrutura. Insira manualmente abaixo:")
+    df_materiais_base = pd.DataFrame(columns=["Codigo", "Material", "Quantidade"])
+
+# Gera a tabela interativa
 df_editavel = st.data_editor(
     df_materiais_base,
     num_rows="dynamic", 
@@ -222,7 +247,8 @@ if salvar:
                     "Estrutura": estrutura,
                     "Acao": acao,
                     "Tipo_Item": "Material",
-                    "Codigo": "", 
+                    # Lê o código da coluna da tabela editável se existir
+                    "Codigo": row.get("Codigo", ""), 
                     "Descricao": row["Material"],
                     "Quantidade": row["Quantidade"],
                     "Observacao": observacao
