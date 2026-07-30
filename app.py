@@ -43,7 +43,7 @@ except Exception:
 st.markdown("---")
 
 # ==========================================
-# CARREGAMENTO DO BANCO DE DADOS (NOVO)
+# CARREGAMENTO DO BANCO DE DADOS
 # ==========================================
 try:
     xls = pd.ExcelFile("BANCO.xlsx")
@@ -117,15 +117,21 @@ if incluir_poste:
     st.info(f"Código Mão de Obra do Poste gerado: **{cod_poste}** - {desc_poste}")
 
 # ==========================================
-# 3. ESTRUTURA E AÇÃO
+# 3. ESTRUTURA E AÇÃO (COM FILTRO MT/BT)
 # ==========================================
 st.markdown("---")
 st.subheader("⚙️ Estruturas e Equipamentos")
 
+# Botões para escolher entre Média Tensão ou Baixa Tensão
+tipo_rede = st.radio("Selecione o Tipo de Rede da Estrutura:", ["MT", "BT"], horizontal=True)
+
+# Filtra a aba de composições pelo tipo de rede escolhido
+tb_comp_filtrada = tb_composicao[tb_composicao["Rede"] == tipo_rede]
+
 col_e1, col_e2 = st.columns(2)
 
-# Busca as estruturas únicas da aba de composições
-estruturas_disponiveis = sorted(tb_composicao["Estrutura"].dropna().unique())
+# Busca as estruturas únicas APENAS da rede selecionada (MT ou BT)
+estruturas_disponiveis = sorted(tb_comp_filtrada["Estrutura"].dropna().unique())
 
 with col_e1:
     estrutura = st.selectbox("Estrutura Adicional", estruturas_disponiveis)
@@ -150,8 +156,8 @@ else:
 
 st.success(f"**{cod_mo}** - {desc_mo} ({acao})")
 
-# 4.2 Busca os Materiais correspondentes na tb_Composicao
-resultado_materiais = tb_composicao[tb_composicao["Estrutura"] == estrutura]
+# 4.2 Busca os Materiais correspondentes na planilha já filtrada
+resultado_materiais = tb_comp_filtrada[tb_comp_filtrada["Estrutura"] == estrutura]
 
 if len(resultado_materiais) > 0:
     # Seleciona Código, Nome e Quantidade para o editor
@@ -247,7 +253,6 @@ if salvar:
                     "Estrutura": estrutura,
                     "Acao": acao,
                     "Tipo_Item": "Material",
-                    # Lê o código da coluna da tabela editável se existir
                     "Codigo": row.get("Codigo", ""), 
                     "Descricao": row["Material"],
                     "Quantidade": row["Quantidade"],
