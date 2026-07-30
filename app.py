@@ -42,7 +42,7 @@ except Exception:
 
 st.markdown("---")
 
-# Carrega composição (Ainda usando a base antiga temporariamente)
+# Carrega composição (Base antiga temporária)
 try:
     df_comp = pd.read_excel("composicoes.xlsx")
 except Exception:
@@ -66,10 +66,10 @@ with col3:
     poste = st.text_input("Identificação do Poste (Ex: P01, P02)", key="input_poste")
 
 # ==========================================
-# 2. DADOS DO POSTE (NOVA LÓGICA)
+# 2. DADOS DO POSTE (LÓGICA ATUALIZADA)
 # ==========================================
 st.markdown("---")
-st.subheader("🏗️ Dados do Poste Principal")
+st.subheader("🗼 Dados do Poste Principal")
 
 incluir_poste = st.checkbox("Incluir instalação/retirada de Poste Limpo nesta fiscalização?")
 
@@ -80,24 +80,28 @@ if incluir_poste:
     col_p1, col_p2 = st.columns(2)
     
     with col_p1:
-        altura = st.number_input("Altura do Poste (m)", min_value=5, max_value=25, value=12, step=1)
+        # Opções ajustadas a partir de 10 metros
+        altura = st.selectbox("Altura do Poste (m)", [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25])
     
     with col_p2:
-        esforco = st.selectbox("Esforço (daN)", [150, 200, 300, 400, 600, 800, 1000])
+        # Opções restritas aos esforços solicitados
+        esforco = st.selectbox("Esforço (daN)", [300, 600, 1000])
 
-    # Regras fixas baseadas na sua fórmula do Power Apps
     if altura <= 12 and esforco <= 600:
         cod_poste = "1015"
         desc_poste = "Poste Limpo (sem mat. ou equip.) 12 >=P<= 600"
+        
     elif altura <= 12 and esforco > 600:
         cod_poste = "1016"
         desc_poste = "Poste Limpo (sem mat. ou equip.) 12 >=P> 600"
+        
     elif 12 < altura <= 16 and esforco >= 600:
         cod_poste = "1017"
         desc_poste = "Poste Limpo (sem mat. ou equip.) 12<P<=16 e P>=600"
+        
     else:
         cod_poste = "1018"
-        desc_poste = "Poste Limpo (sem mat. ou equip.) 16 <P> 600"
+        desc_poste = "Poste Limpo (sem mat. ou equip.) Configuração Especial"
 
     st.info(f"Código Mão de Obra do Poste gerado: **{cod_poste}** - {desc_poste}")
 
@@ -173,7 +177,7 @@ if salvar:
     
     linhas_para_salvar = []
 
-    # 1. Salva a Mão de Obra do Poste (Se a caixinha estiver marcada)
+    # 1. Salva a Mão de Obra do Poste
     if incluir_poste:
         dados_poste = {
             "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -181,7 +185,7 @@ if salvar:
             "Municipio": municipio,
             "Poste": nome_poste,
             "Estrutura": "Poste Limpo",
-            "Acao": "Instalação", # Pode ajustar para retirar depois
+            "Acao": "Instalação", 
             "Tipo_Item": "Mão de Obra",
             "Codigo": cod_poste,
             "Descricao": desc_poste,
