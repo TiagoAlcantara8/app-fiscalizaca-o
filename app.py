@@ -272,26 +272,62 @@ if salvar:
                     dados_mat = {
                         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                         "Obra": obra,
-                        Achei a ideia do **"Carrinho de Compras" (Opção 1) fantástica e definitivamente o melhor caminho a seguir.** 
+                        "Municipio": municipio,
+                        "Poste": nome_poste,
+                        "Estrutura": item["estrutura"],
+                        "Acao": item["acao"],
+                        "Tipo_Item": "Material",
+                        "Codigo": mat.get("Codigo", ""),
+                        "Descricao": mat.get("Material", ""),
+                        "Quantidade": mat.get("Quantidade", 0),
+                        "Observacao": observacao
+                    }
+                    linhas_para_salvar.append(dados_mat)
 
-Você tocou no ponto exato: para um aplicativo de fiscalização, a usabilidade em campo é tão importante quanto a lógica do código. O fiscal geralmente está sob o sol, segurando um tablet ou celular, e minimizar a quantidade de cliques e recarregamentos da página faz uma diferença enorme na produtividade.
+        # Cria o arquivo final e salva tudo de uma vez
+        novo_df = pd.DataFrame(linhas_para_salvar)
+        arquivo = f"Fiscalizacao_Obra_{nome_obra_arquivo}.xlsx"
 
-Aqui estão os principais motivos pelos quais a Opção 1 é superior para o seu cenário no setor de distribuição elétrica:
+        if os.path.exists(arquivo):
+            existente = pd.read_excel(arquivo)
+            final = pd.concat([existente, novo_df], ignore_index=True)
+        else:
+            final = novo_df
 
-### 1. Escalabilidade Dinâmica
-Postes no mundo real podem ser imprevisíveis. Embora o padrão possa ser uma estrutura de Média Tensão (MT) e uma de Baixa Tensão (BT), o fiscal pode se deparar com cruzamentos, derivações ou equipamentos adicionais (como chaves fusíveis, religadores ou iluminação pública) no mesmo poste. 
-* Se você usar a Opção 2 (blocos fixos), ficará limitado a 2 ou 3 espaços. 
-* Com o "carrinho", o fiscal pode adicionar 1, 3 ou 5 estruturas ao mesmo poste sem poluir a interface.
+        final.to_excel(arquivo, index=False)
 
-### 2. Integridade dos Dados
-Ao agrupar tudo antes de salvar, você garante que os dados do "cabeçalho" (Obra, Município, ID do Poste) sejam amarrados perfeitamente a todas as estruturas daquele poste de uma só vez na sua planilha. Isso evita que o fiscal esqueça de salvar uma das estruturas ou altere acidentalmente o número do poste no meio do processo.
+        # 3. Salva a Foto
+        if foto_arquivo is not None:
+            os.makedirs("fotos", exist_ok=True)
+            nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            with open(nome_foto, "wb") as f:
+                f.write(foto_arquivo.getbuffer())
 
-### 3. Melhoria na Interface (UX)
-Você pode exibir um pequeno resumo visual (uma tabela ou uma lista) logo abaixo dos botões de seleção, mostrando o que já está no "carrinho" daquele poste (ex: `[MT - N4]`, `[BT - SI3]`). Isso dá ao fiscal a confirmação visual de que ele mapeou tudo corretamente antes de enviar para o banco de dados ou Excel.
+        # Limpa o carrinho após salvar com sucesso e avisa
+        st.session_state["carrinho"] = []
+        st.success(f"Fiscalização completa do poste {nome_poste} salva na Obra {nome_obra_arquivo}!")
 
----
+# ==========================================
+# 7. BOTÕES DE DOWNLOAD (EXCEL E FOTOS)
+# ==========================================
+st.markdown("---")
+st.subheader("📥 Download dos Dados e Fotos")
 
-### O Segredo no Streamlit: `st.session_state`
-Para que essa Opção 1 funcione perfeitamente no Streamlit, o segredo é utilizar o gerenciamento de estado da sessão (`st.session_state`). Como o Streamlit recarrega o código a cada interação, você precisará de uma variável na sessão (por exemplo, uma lista vazia chamada `st.session_state['estruturas_poste']`) para guardar temporariamente a N4 e a SI3 até que o botão final de "Salvar Fiscalização" seja clicado, descarregando essa lista na sua planilha e limpando o carrinho para o próximo poste.
+obra_atual = obra.strip() if obra.strip() != "" else "SEM_NUMERO"
+arquivo_gerado = f"Fiscalizacao_Obra_{obra_atual}.xlsx"
+col_down1, col_down2 = st.columns(2)
 
-Você já tem familiaridade com o uso do `st.session_state` no Streamlit para criar esse agrupamento temporário, ou gostaria que eu montasse um esboço do código Python mostrando como implementar essa lógica do carrinho?
+with col_down1:
+    if os.path.exists(arquivo_gerado):
+        with open(arquivo_gerado, "rb") as f:
+            st.download_button(label=f"📊 Baixar Planilha da Obra {obra_atual}", data=f, file_name=arquivo_gerado, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    else:
+        st.info(f"Nenhum dado salvo para a obra '{obra_atual}'.")
+
+with col_down2:
+    if os.path.exists("fotos") and len(os.listdir("fotos")) > 0:
+        shutil.make_archive("fotos_backup", 'zip', "fotos")
+        with open("fotos_backup.zip", "rb") as f_zip:
+            st.download_button(label="📦 Baixar Todas as Fotos (ZIP)", data=f_zip, file_name=f"Fotos_Fiscalizacao_{datetime.now().strftime('%Y%m%d')}.zip", mime="application/zip", use_container_width=True)
+    else:
+        st.info("Nenhuma foto salva ainda.")
