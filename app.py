@@ -159,7 +159,6 @@ if len(mo_info) > 0:
     col_valor = "Valor_Instalar" if acao == "Instalação" else "Valor_Retirar"
     valor_previsto = tratar_valor(mo_info.iloc[0][col_valor])
 else:
-    # Tenta buscar sem considerar o Tipo (fallback caso a base não tenha LV/LM mapeado)
     mo_info_fallback = tb_mao_obra[tb_mao_obra["Estrutura"] == estrutura]
     if len(mo_info_fallback) > 0:
         cod_mo = mo_info_fallback.iloc[0]["Cod_MO"]
@@ -252,7 +251,6 @@ if salvar:
         linhas_para_salvar = []
 
         if incluir_poste:
-            # Busca o valor financeiro do poste na tabela tb_MaoObra
             valor_poste = 0.0
             poste_match = tb_mao_obra[tb_mao_obra["Cod_MO"].astype(str) == str(cod_poste)]
             if len(poste_match) > 0:
@@ -322,22 +320,31 @@ if salvar:
         arquivo = f"Fiscalizacao_Obra_{nome_obra_arquivo}.xlsx"
 
         if os.path.exists(arquivo):
-            existente = pd.read_excel(arquivo)
+            # Lê SOMENTE a aba 0 (Dados) para evitar puxar as informações da aba de Resumo
+            existente = pd.read_excel(arquivo, sheet_name=0)
+            
+            # Caso o usuário tenha salvo o arquivo usando o código anterior, limpamos a coluna velha
+            if "Gasto_Previsto_Obra" in existente.columns:
+                existente = existente.drop(columns=["Gasto_Previsto_Obra"])
+                
             final = pd.concat([existente, novo_df], ignore_index=True)
         else:
             final = novo_df
 
-        # ========================================================
-        # NOVA LÓGICA: SOMA DO GASTO PREVISTO DA OBRA
-        # ========================================================
-        # Garante que a coluna Valor_Total seja tratada como número para evitar erros de soma
+        # Garante que os valores numéricos estão corretos
         final["Valor_Total"] = pd.to_numeric(final["Valor_Total"], errors="coerce").fillna(0.0)
-        
-        # Agrupa por Obra e soma todos os Valores Totais, criando a nova coluna 'Gasto_Previsto_Obra'
-        final["Gasto_Previsto_Obra"] = final.groupby("Obra")["Valor_Total"].transform("sum").round(2)
 
-        # Salva o arquivo final
-        final.to_excel(arquivo, index=False)
+        # ========================================================
+        # NOVA LÓGICA: CRIA A TABELA DE RESUMO EM UMA ABA SEPARADA
+        # ========================================================
+        # Agrupa tudo pelo nome da obra e soma
+        df_resumo = final.groupby("Obra", as_index=False)["Valor_Total"].sum()
+        df_resumo.rename(columns={"Valor_Total": "VALOR PREVISTO DA OBRA"}, inplace=True)
+
+        # Salva o arquivo usando o ExcelWriter para criar múltiplas abas (Planilhas)
+        with pd.ExcelWriter(arquivo, engine='openpyxl') as writer:
+            final.to_excel(writer, sheet_name="Dados", index=False)
+            df_resumo.to_excel(writer, sheet_name="Resumo", index=False)
 
         if foto_arquivo is not None:
             os.makedirs("fotos", exist_ok=True)
