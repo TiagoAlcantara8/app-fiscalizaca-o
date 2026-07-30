@@ -33,7 +33,6 @@ if "input_obs" not in st.session_state:
     st.session_state["input_obs"] = ""
 if "carrinho" not in st.session_state:
     st.session_state["carrinho"] = []
-# NOVA MEMÓRIA: Carrinho apenas para cabos
 if "carrinho_cabos" not in st.session_state:
     st.session_state["carrinho_cabos"] = []
 
@@ -44,6 +43,9 @@ def limpar_tudo():
     st.session_state["input_obs"] = ""
     st.session_state["carrinho"] = []
     st.session_state["carrinho_cabos"] = []
+
+def limpar_obs():
+    st.session_state["input_obs"] = ""
 
 # ==========================================
 # CABEÇALHO E VISUAL
@@ -80,7 +82,7 @@ try:
     df_cabos.rename(columns={'Unnamed: 1': 'Descricao'}, inplace=True)
     df_cabos = df_cabos.dropna(subset=['Descricao', 'FATOR kg/m'])
 except Exception:
-    df_cabos = pd.DataFrame() # Cria vazio se o arquivo não estiver lá
+    df_cabos = pd.DataFrame() 
 
 # ==========================================
 # 1. DADOS GERAIS
@@ -188,7 +190,7 @@ if st.button("➕ Adicionar Esta Estrutura", type="primary"):
     st.rerun()
 
 # ==========================================
-# 4. LANÇAMENTO DE CABOS (NOVO MÓDULO)
+# 4. LANÇAMENTO DE CABOS
 # ==========================================
 if not df_cabos.empty:
     st.markdown("---")
@@ -208,7 +210,6 @@ if not df_cabos.empty:
     with col_v2:
         qte_cabo = st.number_input("Quantidade (Tamanho ou Peso):", min_value=0.0, step=1.0)
         
-    # Lógica de cálculo matemático lendo sua planilha
     cabo_info = df_cabos[df_cabos["Descricao"] == cabo_selecionado].iloc[0]
     fator = tratar_valor(cabo_info["FATOR kg/m"])
     cod_cabo = str(cabo_info["CÓDIGO"]) if pd.notna(cabo_info["CÓDIGO"]) else "S/C"
@@ -243,18 +244,16 @@ else:
     st.warning("Módulo de cabos inativo. Arquivo 'Kit Tecnico - Copy.xlsx' não encontrado.")
 
 # ==========================================
-# 5. RESUMO VISUAL DO CARRINHO (ESTRUTURAS + CABOS)
+# 5. RESUMO VISUAL DO CARRINHO
 # ==========================================
 st.markdown("---")
 st.subheader("🛒 Resumo das Inserções (Poste ou Vão)")
 
-# Mostra as Estruturas
 if len(st.session_state["carrinho"]) > 0:
     st.write("🔧 **Estruturas:**")
     for i, item in enumerate(st.session_state["carrinho"]):
         st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;{i+1}. {item['estrutura']} ({item['rede']} - {item['execucao']}) | R$ {item['valor_mo']:,.2f} | *{len(item['materiais'])} materiais*")
 
-# Mostra os Cabos
 if len(st.session_state["carrinho_cabos"]) > 0:
     st.write("🧵 **Cabos (Condutores):**")
     for i, item in enumerate(st.session_state["carrinho_cabos"]):
@@ -272,21 +271,26 @@ else:
 # 6. FOTOS E OBSERVAÇÕES
 # ==========================================
 st.markdown("---")
-st.subheader("📸 Fotos")
+st.subheader("📸 Fotos do Poste/Vão")
+
 opcao_foto = st.radio("Como deseja enviar a foto?", ["Tirar foto com a Câmera", "Anexar arquivo da Galeria", "Não enviar foto"], horizontal=True)
 
-foto_arquivo = None
+foto_camera = None
+fotos_galeria = []
+
 if opcao_foto == "Tirar foto com a Câmera":
-    foto_arquivo = st.camera_input("Tire uma foto do poste completo")
+    st.warning("⚠️ Nota: Fotos tiradas por aqui podem ter qualidade reduzida pelo navegador.")
+    foto_camera = st.camera_input("Tire uma foto do poste")
 elif opcao_foto == "Anexar arquivo da Galeria":
-    foto_arquivo = st.file_uploader("Escolha uma imagem do poste completo", type=["jpg", "jpeg", "png"])
+    st.info("💡 Dica: Pelo celular, escolha 'Tirar Foto' ao anexar para usar a qualidade máxima. Você pode selecionar VÁRIAS fotos de uma vez!")
+    fotos_galeria = st.file_uploader("Anexe as fotos (Obra, Poste, etc.)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 st.markdown("---")
 st.subheader("📝 Observações Gerais do Poste/Vão")
 observacao = st.text_area("Digite suas observações", key="input_obs_geral")
 
 # ==========================================
-# 7. SALVAMENTO FINAL DA PLANILHA OFICIAL
+# 7. SALVAMENTO FINAL DA PLANILHA OFICIAL E FOTOS
 # ==========================================
 st.markdown("<br>", unsafe_allow_html=True) 
 salvar = st.button("✅ Salvar Fiscalização Completa", use_container_width=True, type="primary")
@@ -300,7 +304,6 @@ if salvar:
         
         linhas_para_salvar = []
 
-        # Adiciona Poste
         if incluir_poste:
             valor_poste = 0.0
             poste_match = tb_mao_obra[tb_mao_obra["Cod_MO"].astype(str) == str(cod_poste)]
@@ -314,7 +317,6 @@ if salvar:
                 "Valor_Total": round(valor_poste, 2), "Observacao": observacao
             })
 
-        # Adiciona Estruturas e seus materiais
         for item in st.session_state["carrinho"]:
             linhas_para_salvar.append({
                 "Data": datetime.now().strftime("%d/%m/%Y %H:%M"), "Obra": obra, "Municipio": municipio, "Poste": nome_poste,
@@ -331,13 +333,11 @@ if salvar:
                         "Quantidade": mat.get("Quantidade", 0), "Valor_Unitario": 0.0, "Valor_Total": 0.0, "Observacao": observacao
                     })
 
-        # Adiciona os Cabos mapeados
         for cabo in st.session_state["carrinho_cabos"]:
             linhas_para_salvar.append({
                 "Data": datetime.now().strftime("%d/%m/%Y %H:%M"), "Obra": obra, "Municipio": municipio, "Poste": nome_poste,
-                "Rede": cabo["rede"], "Estrutura": "Lançamento de Condutor", "Acao": cabo["acao"], "Execucao": "LM", # Padrão LM para cabos
-                "Tipo_Item": "Material (Condutor)", "Codigo": cabo["codigo"], 
-                "Descricao": cabo["descricao"], 
+                "Rede": cabo["rede"], "Estrutura": "Lançamento de Condutor", "Acao": cabo["acao"], "Execucao": "LM",
+                "Tipo_Item": "Material (Condutor)", "Codigo": cabo["codigo"], "Descricao": cabo["descricao"], 
                 "Quantidade": f"{cabo['metros']:.2f} m ({cabo['quilos']:.2f} kg)", 
                 "Valor_Unitario": 0.0, "Valor_Total": 0.0, "Observacao": observacao
             })
@@ -361,11 +361,23 @@ if salvar:
             final.to_excel(writer, sheet_name="Dados", index=False)
             df_resumo.to_excel(writer, sheet_name="Resumo", index=False)
 
-        if foto_arquivo is not None:
-            os.makedirs("fotos", exist_ok=True)
-            nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        # ----------------------------------------------------
+        # SALVAMENTO DAS FOTOS (Câmera ou Galeria)
+        # ----------------------------------------------------
+        os.makedirs("fotos", exist_ok=True)
+        
+        if foto_camera is not None:
+            data_hora = datetime.now().strftime('%Y%m%d_%H%M%S')
+            nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{data_hora}_Camera.jpg"
             with open(nome_foto, "wb") as f:
-                f.write(foto_arquivo.getbuffer())
+                f.write(foto_camera.getbuffer())
+
+        if fotos_galeria:
+            for idx, foto in enumerate(fotos_galeria):
+                data_hora = datetime.now().strftime('%Y%m%d_%H%M%S')
+                nome_foto = f"fotos/Obra_{nome_obra_arquivo}_Poste_{nome_poste}_{data_hora}_Galeria_Foto{idx+1}.jpg"
+                with open(nome_foto, "wb") as f:
+                    f.write(foto.getbuffer())
 
         st.session_state["carrinho"] = []
         st.session_state["carrinho_cabos"] = []
