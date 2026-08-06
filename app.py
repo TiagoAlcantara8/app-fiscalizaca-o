@@ -97,7 +97,7 @@ with col1:
 with col2:
     municipio = st.text_input("Município", key="input_municipio")
 with col3:
-    poste = st.text_input("Identificação (Ex: P01, Vão P01-P02)", key="input_poste")
+    poste = st.text_input("Identificação (Ex: P01 ao P10)", key="input_poste")
 
 # ==========================================
 # 2. DADOS DO POSTE
@@ -108,13 +108,16 @@ st.subheader("🗼 Dados do Poste Principal")
 incluir_poste = st.checkbox("Incluir instalação/retirada de Poste Limpo nesta fiscalização?")
 cod_poste = ""
 desc_poste = ""
+qtd_poste = 1 # Variável padrão caso ele não marque
 
 if incluir_poste:
-    col_p1, col_p2 = st.columns(2)
+    col_p1, col_p2, col_p3 = st.columns([2, 2, 1])
     with col_p1:
         altura = st.selectbox("Altura do Poste (m)", [10, 11, 12, 13, 14, 15, 16])
     with col_p2:
         esforco = st.selectbox("Esforço (daN)", [300, 600, 1000])
+    with col_p3:
+        qtd_poste = st.number_input("Qtd Postes", min_value=1, value=1, step=1)
 
     if altura <= 12 and esforco <= 600:
         cod_poste = "1015"
@@ -128,7 +131,7 @@ if incluir_poste:
     else:
         cod_poste = "1018"
         desc_poste = "Poste Limpo (sem mat. ou equip.) Configuração Especial"
-    st.info(f"Código Mão de Obra do Poste gerado: **{cod_poste}** - {desc_poste}")
+    st.info(f"Código Mão de Obra gerado: **{cod_poste}** - {desc_poste} | Multiplicador: {qtd_poste}x")
 
 # ==========================================
 # 3. ESTRUTURAS
@@ -143,35 +146,36 @@ with col_rad2:
     tipo_execucao = st.radio("Método de Execução:", ["Linha Morta (LM)", "Linha Viva (LV)"], horizontal=True)
 
 tb_comp_filtrada = tb_composicao[tb_composicao["Rede"] == tipo_rede]
-col_e1, col_e2 = st.columns(2)
-estruturas_disponiveis = sorted(tb_comp_filtrada["Estrutura"].dropna().unique())
+col_e1, col_e2, col_e3 = st.columns([2, 2, 1])
 
 with col_e1:
-    estrutura = st.selectbox("Estrutura Adicional", estruturas_disponiveis)
+    estrutura = st.selectbox("Estrutura Adicional", sorted(tb_comp_filtrada["Estrutura"].dropna().unique()))
 with col_e2:
     acao = st.selectbox("Ação da Estrutura", ["Instalação", "Retirada"])
+with col_e3:
+    qtd_estrutura = st.number_input("Qtd (Multiplicador)", min_value=1, value=1, step=1)
 
 sigla_exec = "LV" if tipo_execucao == "Linha Viva (LV)" else "LM"
 mo_info = tb_mao_obra[(tb_mao_obra["Estrutura"] == estrutura) & (tb_mao_obra["Tipo"] == sigla_exec)]
-valor_previsto = 0.0
+valor_previsto_unitario = 0.0
 
 if len(mo_info) > 0:
     cod_mo = mo_info.iloc[0]["Cod_MO"]
     desc_mo = mo_info.iloc[0]["Descricao_MO"]
     col_valor = "Valor_Instalar" if acao == "Instalação" else "Valor_Retirar"
-    valor_previsto = tratar_valor(mo_info.iloc[0][col_valor])
+    valor_previsto_unitario = tratar_valor(mo_info.iloc[0][col_valor])
 else:
     mo_info_fallback = tb_mao_obra[tb_mao_obra["Estrutura"] == estrutura]
     if len(mo_info_fallback) > 0:
         cod_mo = mo_info_fallback.iloc[0]["Cod_MO"]
         desc_mo = mo_info_fallback.iloc[0]["Descricao_MO"]
         col_valor = "Valor_Instalar" if acao == "Instalação" else "Valor_Retirar"
-        valor_previsto = tratar_valor(mo_info_fallback.iloc[0][col_valor])
+        valor_previsto_unitario = tratar_valor(mo_info_fallback.iloc[0][col_valor])
     else:
         cod_mo = "MO_EXTRA"
         desc_mo = f"Mão de Obra para {estrutura}"
 
-st.success(f"**Mão de Obra identificada:** {cod_mo} - {desc_mo} | Valor Previsto: R$ {valor_previsto:,.2f}")
+st.success(f"**Mão de Obra:** {cod_mo} - {desc_mo} | Unitário: R$ {valor_previsto_unitario:,.2f} | **Total do Trecho: R$ {valor_previsto_unitario * qtd_estrutura:,.2f}**")
 
 resultado_materiais = tb_comp_filtrada[tb_comp_filtrada["Estrutura"] == estrutura]
 if len(resultado_materiais) > 0:
@@ -180,12 +184,14 @@ if len(resultado_materiais) > 0:
 else:
     df_materiais_base = pd.DataFrame(columns=["Codigo", "Material", "Quantidade"])
 
+st.info(f"⚠️ A tabela abaixo mostra os materiais de **UMA** estrutura. Ao salvar, eles serão multiplicados por {qtd_estrutura}.")
 df_editavel = st.data_editor(df_materiais_base, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"editor_{estrutura}")
 
-if st.button("➕ Adicionar Esta Estrutura", type="primary"):
+if st.button("➕ Adicionar Esta Estrutura (em Lote)", type="primary"):
     st.session_state["carrinho"].append({
         "estrutura": estrutura, "acao": acao, "rede": tipo_rede, "execucao": sigla_exec,
-        "cod_mo": cod_mo, "desc_mo": desc_mo, "valor_mo": valor_previsto, "materiais": df_editavel.to_dict('records')
+        "cod_mo": cod_mo, "desc_mo": desc_mo, "valor_mo_unit": valor_previsto_unitario, 
+        "qtd_estrutura": qtd_estrutura, "materiais": df_editavel.to_dict('records')
     })
     st.rerun()
 
@@ -208,7 +214,7 @@ if not df_cabos.empty:
     with col_v1:
         tipo_medida = st.radio("Informar quantidade em:", ["Metros (m)", "Quilos (kg)"], horizontal=True)
     with col_v2:
-        qte_cabo = st.number_input("Quantidade (Tamanho ou Peso):", min_value=0.0, step=1.0)
+        qte_cabo = st.number_input("Quantidade Total (Tamanho ou Peso):", min_value=0.0, step=1.0)
         
     cabo_info = df_cabos[df_cabos["Descricao"] == cabo_selecionado].iloc[0]
     fator = tratar_valor(cabo_info["FATOR kg/m"])
@@ -240,19 +246,18 @@ if not df_cabos.empty:
             st.rerun()
         else:
             st.error("Informe uma quantidade maior que zero.")
-else:
-    st.warning("Módulo de cabos inativo. Arquivo 'Kit Tecnico - Copy.xlsx' não encontrado.")
 
 # ==========================================
 # 5. RESUMO VISUAL DO CARRINHO
 # ==========================================
 st.markdown("---")
-st.subheader("🛒 Resumo das Inserções (Poste ou Vão)")
+st.subheader("🛒 Resumo das Inserções do Trecho")
 
 if len(st.session_state["carrinho"]) > 0:
-    st.write("🔧 **Estruturas:**")
+    st.write("🔧 **Estruturas (Com Multiplicador):**")
     for i, item in enumerate(st.session_state["carrinho"]):
-        st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;{i+1}. {item['estrutura']} ({item['rede']} - {item['execucao']}) | R$ {item['valor_mo']:,.2f} | *{len(item['materiais'])} materiais*")
+        valor_total_item = item['valor_mo_unit'] * item['qtd_estrutura']
+        st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;{i+1}. **{item['qtd_estrutura']}x {item['estrutura']}** ({item['rede']} - {item['execucao']}) | R$ {valor_total_item:,.2f} Total | *{len(item['materiais'])} materiais-base*")
 
 if len(st.session_state["carrinho_cabos"]) > 0:
     st.write("🧵 **Cabos (Condutores):**")
@@ -293,7 +298,7 @@ observacao = st.text_area("Digite suas observações", key="input_obs_geral")
 # 7. SALVAMENTO FINAL DA PLANILHA OFICIAL E FOTOS
 # ==========================================
 st.markdown("<br>", unsafe_allow_html=True) 
-salvar = st.button("✅ Salvar Fiscalização Completa", use_container_width=True, type="primary")
+salvar = st.button("✅ Salvar Lançamento do Trecho", use_container_width=True, type="primary")
 
 if salvar:
     if len(st.session_state["carrinho"]) == 0 and len(st.session_state["carrinho_cabos"]) == 0 and not incluir_poste:
@@ -305,32 +310,39 @@ if salvar:
         linhas_para_salvar = []
 
         if incluir_poste:
-            valor_poste = 0.0
+            valor_poste_unit = 0.0
             poste_match = tb_mao_obra[tb_mao_obra["Cod_MO"].astype(str) == str(cod_poste)]
             if len(poste_match) > 0:
-                valor_poste = tratar_valor(poste_match.iloc[0]["Valor_Instalar"])
+                valor_poste_unit = tratar_valor(poste_match.iloc[0]["Valor_Instalar"])
 
             linhas_para_salvar.append({
                 "Data": datetime.now().strftime("%d/%m/%Y %H:%M"), "Obra": obra, "Municipio": municipio, "Poste": nome_poste,
                 "Rede": "MT/BT", "Estrutura": "Poste Limpo", "Acao": "Instalação", "Execucao": "LM", "Tipo_Item": "Mão de Obra",
-                "Codigo": cod_poste, "Descricao": desc_poste, "Quantidade": 1, "Valor_Unitario": round(valor_poste, 2),
-                "Valor_Total": round(valor_poste, 2), "Observacao": observacao
+                "Codigo": cod_poste, "Descricao": desc_poste, "Quantidade": qtd_poste, 
+                "Valor_Unitario": round(valor_poste_unit, 2), "Valor_Total": round(valor_poste_unit * qtd_poste, 2), "Observacao": observacao
             })
 
         for item in st.session_state["carrinho"]:
+            # Adiciona a Mão de Obra multiplicada
             linhas_para_salvar.append({
                 "Data": datetime.now().strftime("%d/%m/%Y %H:%M"), "Obra": obra, "Municipio": municipio, "Poste": nome_poste,
                 "Rede": item["rede"], "Estrutura": item["estrutura"], "Acao": item["acao"], "Execucao": item["execucao"],
-                "Tipo_Item": "Mão de Obra", "Codigo": item["cod_mo"], "Descricao": item["desc_mo"], "Quantidade": 1,
-                "Valor_Unitario": round(item["valor_mo"], 2), "Valor_Total": round(item["valor_mo"], 2), "Observacao": observacao
+                "Tipo_Item": "Mão de Obra", "Codigo": item["cod_mo"], "Descricao": item["desc_mo"], "Quantidade": item["qtd_estrutura"],
+                "Valor_Unitario": round(item["valor_mo_unit"], 2), "Valor_Total": round(item["valor_mo_unit"] * item["qtd_estrutura"], 2), 
+                "Observacao": observacao
             })
+            
+            # Adiciona os Materiais multiplicados
             for mat in item["materiais"]:
                 if pd.notna(mat.get("Material")) and str(mat.get("Material")).strip() != "":
+                    qtd_mat_base = tratar_valor(mat.get("Quantidade", 0))
+                    qtd_mat_total = qtd_mat_base * item["qtd_estrutura"] # Mágica da multiplicação em lote!
+                    
                     linhas_para_salvar.append({
                         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"), "Obra": obra, "Municipio": municipio, "Poste": nome_poste,
                         "Rede": item["rede"], "Estrutura": item["estrutura"], "Acao": item["acao"], "Execucao": item["execucao"],
                         "Tipo_Item": "Material", "Codigo": mat.get("Codigo", ""), "Descricao": mat.get("Material", ""),
-                        "Quantidade": mat.get("Quantidade", 0), "Valor_Unitario": 0.0, "Valor_Total": 0.0, "Observacao": observacao
+                        "Quantidade": qtd_mat_total, "Valor_Unitario": 0.0, "Valor_Total": 0.0, "Observacao": observacao
                     })
 
         for cabo in st.session_state["carrinho_cabos"]:
@@ -362,7 +374,7 @@ if salvar:
             df_resumo.to_excel(writer, sheet_name="Resumo", index=False)
 
         # ----------------------------------------------------
-        # SALVAMENTO DAS FOTOS (Câmera ou Galeria)
+        # SALVAMENTO DAS FOTOS
         # ----------------------------------------------------
         os.makedirs("fotos", exist_ok=True)
         
@@ -381,7 +393,7 @@ if salvar:
 
         st.session_state["carrinho"] = []
         st.session_state["carrinho_cabos"] = []
-        st.success(f"Fiscalização completa do poste {nome_poste} salva na Obra {nome_obra_arquivo}!")
+        st.success(f"Fiscalização do trecho {nome_poste} salva na Obra {nome_obra_arquivo} com sucesso!")
 
 # ==========================================
 # 8. BOTÕES DE DOWNLOAD (EXCEL E FOTOS)
